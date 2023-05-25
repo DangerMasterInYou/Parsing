@@ -4,40 +4,43 @@ import requests
 import json
 from bs4 import BeautifulSoup
 
-
 if not os.path.exists("image"):
     os.makedirs("image")
 
 films = []  # Список для хранения фильмов
 number = 1
 headers = {
-        "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9",
-        "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.106 Safari/537.36"
+    "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+    "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.106 Safari/537.36"
+}
+proxies = {
+    'http': 'https://185.15.172.212:3128'
 }
 
 
-def test_request(url, retry=5):
-    if retry == 0:
-        return htmler(url)
-    check_soup = htmler(url)
-    if "setBlockContent()" in str(check_soup):
-        time.sleep(3)
-        print(f"Не удалось подключиться к странице: {url} retry={retry}")
-        return test_request(url, retry=(retry - 1))
-
-
-def htmler(url):
-    req = requests.get(url, headers=headers)
+def check_url(url):
+    req = requests.get(url, headers=headers, allow_redirects=False)
     src = req.content
-    return BeautifulSoup(src, "lxml")
+    soup = BeautifulSoup(src, "html.parser")
+    return soup
 
 
 for year in range(2015, 2022+1, 1):
     for month in range(1, 12+1, 1):
         if (year == 2015 and month != 12) or (year == 2020 and 4 <= month <= 8) or (year == 2022 and month >= 7):
             continue
+        time.sleep(1)
         page_url = f"https://langal.ru/affiche/{year}-{month}/"
-        soup = test_request(page_url)
+        soup = check_url(page_url)
+        for count in range(100+1):
+            if "302 Found" in str(soup):
+                print(f"Не удалось {count} раз переадресовать страницу: {page_url}")
+                soup = check_url(page_url)
+                time.sleep(1)
+            if "setBlockContent()" in str(soup):
+                print(f"Не удалось подключиться {count} раз к странице: {page_url}")
+                time.sleep(1)
+                soup = check_url(page_url)
 
         # Нахождение тегов <div> с классом <filmdesc clear>
         div_films = soup.find_all("div", class_="filmdesc clear")
@@ -68,7 +71,8 @@ for year in range(2015, 2022+1, 1):
                         end_date = "-"
 
             # Нахождение Хронометража
-            duration = (div_film.find('td', class_='label', string='Продолжительность')).find_next_sibling('td').text.strip()
+            duration = div_film.find('td', class_='label', string='Продолжительность')
+            duration = duration.find_next_sibling('td').text.strip()
 
             # Нахождение Режиссёра
             director = (div_film.find('td', class_='label', string='Режиссер')).find_next_sibling('td').text.strip()
@@ -87,7 +91,7 @@ for year in range(2015, 2022+1, 1):
             img_data = requests.get(img_url).content
             if img_data:
                 # Генерация имени файла на основе номера изображения
-                filename = str(number)
+                filename = str(number) + ".jpg"
                 # Полный путь к файлу
                 filepath = os.path.join("image", filename)
                 # Сохранение изображения
@@ -107,11 +111,14 @@ for year in range(2015, 2022+1, 1):
                     films.append(film)  # Добавление фильма в список
                     number += 1
             time.sleep(1)
+        time.sleep(2)
+    time.sleep(3)
 
 # Сохранение данных в файл JSON
 file_mode = "w" if films else "a"
 with open("movies.json", file_mode, encoding="utf-8") as file:
     json.dump(films, file, ensure_ascii=False, indent=4)
+
 
         #     # Нахождение тегов <div> с классом <img>
         #     div_tags = soup.find_all("div", class_="img")
