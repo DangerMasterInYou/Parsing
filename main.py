@@ -1,5 +1,6 @@
 import os
 import time
+from fake_useragent import UserAgent
 import requests
 from bs4 import BeautifulSoup
 from selenium import webdriver
@@ -8,43 +9,76 @@ from selenium.webdriver.common.action_chains import ActionChains
 import json
 
 
-# if not os.path.exists("image"):
-#     os.makedirs("image")
-
-headers = {
-    "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
-    "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/93.0.4577.63 Safari/537.36",
-}
-
-
-def check_url(url):
+def check_url(date):
+    url = f"https://langal.ru/affiche/{date}"
     service = Service('C:\Program Files\JetBrains\PyCharm Community Edition 2023.1.1\chromedriver.exe')
-    driver = webdriver.Chrome(service=service)
+    option = webdriver.ChromeOptions()
+    userAgent = UserAgent().random
+    option.add_argument(f'user-agent={userAgent}')
+    option.add_argument("--disable-extensions")  # Отключение переадресации
+    option.add_argument("Cache-Control=no-cache")
+    option.add_argument("Pragma=no-cache")
+    option.add_argument("--disable-blink-features=AutomationControlled")
+    option.add_argument("--disable-web-security")
+    option.add_argument("--no-sandbox")
+    option.add_argument("Referer=https://langal.ru/affiche/, https://langal.ru/affiche/2022-06")
+    option.add_argument("--disable-dev-shm-usage")
+    option.add_argument("--disable-gpu")
+    option.set_capability('dom.webdriver.enabled', False)
+    driver = webdriver.Chrome(service=service, options=option)
 
     driver.maximize_window()
 
     try:
+        # Добавляем скрипт JavaScript для изменения navigator.webdriver
+        script = '''
+                Object.defineProperty(navigator, 'webdriver', {
+                    get: () => undefined
+                })
+                '''
+        driver.execute_script(script)
+
         driver.get(url=url)
-        time.sleep(3)
+        print(driver.page_source)
+        time.sleep(5)
+        if "302 Found" in str(driver.find_element_by_tag_name("body")):
+            print("Found")
+            driver.close()
+            check_url(url)
+        if "setBlockContent()" in str(driver.find_element_by_tag_name("body")):
+            print("setBlockContent()")
+            driver.close()
+            check_url(url)
+        # with open(f"page/date.html", "w") as file:
+        #     file.write(driver.page_source)
     except Exception as _ex:
         print(_ex)
     finally:
         driver.close()
         driver.quit()
 
-    # req = requests.get(url, headers=headers, allow_redirects=False)
-    # src = req.content
-    # soup = BeautifulSoup(src, "html.parser")
-    # return soup
+
 def main():
-    page_url = "https://langal.ru/affiche/2016-01/"
-    check_url(page_url)
+    if not os.path.exists("image"):
+        os.makedirs("image")
+    if not os.path.exists("page"):
+        os.makedirs("page")
+
+    films = []  # Список для хранения фильмов
+
+    for year in range(2016, 2022 + 1, 1):
+        for month in range(1, 12+1, 1):
+            if (year == 2015 and month != 12) or (year == 2020 and 4 <= month <= 8) or (year == 2022 and month >= 7):
+                continue
+            time.sleep(1)
+            date_data = f"{year}-{month}/"
+            check_url(date_data)
+            # f = open('example.txt', 'r')
 
 
 if __name__ == "__main__":
     main()
-# number = 1  # Номер для хранения постера
-# films = []  # Список для хранения фильмов
+
 # for year in range(2015, 2022+1, 1):
 #     for month in range(1, 12+1, 1):
 #         if (year == 2015 and month != 12) or (year == 2020 and 4 <= month <= 8) or (year == 2022 and month >= 7):
@@ -259,3 +293,15 @@ if __name__ == "__main__":
 
         # with open("films.html", "w") as file:
         #     file.write(formatted_src)
+# setBlockContent(): Block BANNERS_PLACE3ALL keys mismatch: BLOCK: $VAR1 = {
+#           'REQUEST' => {
+#                          'place' => '3'
+#                        },
+#           'MAXAGE' => 300
+#         };
+#  NEW: $VAR1 = {
+#           'MAXAGE' => 300,
+#           'REQUEST' => {
+#                          'place' => 3
+#                        }
+#         };
